@@ -39,7 +39,7 @@ db.child("Users").child("ericawng").set(data)
 app = Flask(__name__)
 # Mobile app - chatbot
 kik = KikApi('htn2018', '2c9245d3-7101-4565-b6a1-f67212e08433')
-kik.set_configuration(Configuration(webhook='http://4a9eb74b.ngrok.io/incoming'))
+kik.set_configuration(Configuration(webhook='http://f16334ee.ngrok.io/incoming'))
 
 # Defining initiator methods for flask calls
 @app.route('/incoming', methods=['POST'])
@@ -62,25 +62,40 @@ def incoming():
             )
         ])
         index+=1
+        db.child("Users").child("ericawng").update({"index":index})
     elif(index==0):
         db.child("Users").child("ericawng").update({"name":body.lower()})
         name = db.child("Users").child('ericawng').get().val()['name']
         kik.send_messages([
             TextMessage(
                 to=message.from_user,
-                body='Hi '+name+', what is your gender?'
+                body='Hi '+name+', what is your gender? (Male/Female/Other)'
             )
         ])
         index+=1
+        db.child("Users").child("ericawng").update({"index":index})
     elif(index==1):
-        db.child("Users").child("ericawng").update({"gender":body.lower()})
-        kik.send_messages([
-            TextMessage(
-                to=user,                 
-                body='Please describe two of your most significant symptoms as best as you can. Text "Done" if you have no more symptoms to input.'
-            )
-        ])
-        index+=1
+        body = body.lower()
+        if(body=='other'):
+            body = 'male'
+        print(body)
+        if(body=='male' or body=='female'):
+            db.child("Users").child("ericawng").update({"gender":body})
+            kik.send_messages([
+                TextMessage(
+                    to=user,                 
+                    body='Please describe two of your most significant symptoms as best as you can. Text "Done" if you have no more symptoms to input.'
+                )
+            ])
+            index+=1
+        else:
+            kik.send_messages([
+                TextMessage(
+                    to=user,                 
+                    body='Please enter a valid gender. (Male/Female/Other)'
+                )
+            ])
+        db.child("Users").child("ericawng").update({"index":index})
     elif(index==2):
         sympindex = db.child("Users").child('ericawng').get().val()['sympindex']
         if(body=='Done'):
@@ -107,6 +122,7 @@ def incoming():
             if(sympindex==1):
                 db.child("Users").child("ericawng").update({"symptom1":id})
                 db.child("Users").child("ericawng").update({"sympindex":sympindex+1})
+        db.child("Users").child("ericawng").update({"index":index})
     else:
         sympindex = db.child("Users").child('ericawng').get().val()['sympindex']
         symp1 = db.child("Users").child('ericawng').get().val()['symptom1']
@@ -117,12 +133,20 @@ def incoming():
         sym+='%5D'
         db.child("Users").child("ericawng").update({"symptoms":sym})
 
-        db.child("Users").child("ericawng").update({"year":body})
-        reply(user)
+        try:
+            int(body)
+            db.child("Users").child("ericawng").update({"year":body})
+            reply(user)
+        except ValueError:
+            kik.send_messages([
+                TextMessage(
+                    to=user,                 
+                    body='Please enter a valid year.'
+                )
+            ])
 
     print (db.child("Users").child('ericawng').get().val()['sympindex'])
 
-    db.child("Users").child("ericawng").update({"index":index})
 
     return Response(status=200)
 
@@ -143,6 +167,7 @@ def getid(msgs):
     return str(id)
 
 def reply(user):
+    print('reply')
     kik.send_messages([
         TextMessage(
             to=user,                 
@@ -150,6 +175,7 @@ def reply(user):
         )
     ])
 
+    print('reply1')
     gender = db.child("Users").child('ericawng').get().val()['gender']
     symptoms = db.child("Users").child('ericawng').get().val()['symptoms']
     year = db.child("Users").child('ericawng').get().val()['year']
@@ -160,6 +186,7 @@ def reply(user):
         "Accept": "application/json"
       }
     )
+    print('reply2')
     result = response.raw_body
 
     result = result.replace("'",'"')
@@ -171,6 +198,7 @@ def reply(user):
                 body="Sorry, we don't recognize your condition..."
             )
         ])
+    print('reply3')
     for j1 in j:
         name = j1['Issue']['Name']
         profname = j1['Issue']['ProfName']
@@ -197,6 +225,10 @@ def reply(user):
                 body= str(place.name)+"\nAddress: "+str(address)+"\nPhone numeber: "+str(place.local_phone_number)
             )
         ])
+    # Defining data types
+    data = {"index": -1,"name":"","gender":"","sympindex":1,"symptom1":0,"symptom2":0,"symptoms":"","year":0}
+    # Define settings
+    db.child("Users").child("ericawng").set(data)
       
 
 
